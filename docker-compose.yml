@@ -1,0 +1,73 @@
+services:
+  pg-0:
+    image: docker.io/bitnami/postgresql-repmgr:16
+    volumes:
+      - pg_0_data:/bitnami/postgresql
+    environment:
+      - POSTGRESQL_POSTGRES_PASSWORD=${POSTGRESQL_BACKEND_PASSWORD}
+      - POSTGRESQL_USERNAME=${POSTGRESQL_USERNAME}
+      - POSTGRESQL_PASSWORD=${POSTGRESQL_PASSWORD}
+      - POSTGRESQL_DATABASE=${POSTGRESQL_DATABASE}
+      - REPMGR_PASSWORD=${REPMGR_PASSWORD}
+      - REPMGR_PRIMARY_HOST=pg-0
+      - REPMGR_PRIMARY_PORT=5432
+      - REPMGR_PARTNER_NODES=pg-0,pg-1:5432
+      - REPMGR_NODE_NAME=pg-0
+      - REPMGR_NODE_NETWORK_NAME=pg-0
+      - REPMGR_PORT_NUMBER=5432
+    env_file:
+      - .env
+
+  pg-1:
+    image: docker.io/bitnami/postgresql-repmgr:16
+    volumes:
+      - pg_1_data:/bitnami/postgresql
+    environment:
+      - POSTGRESQL_POSTGRES_PASSWORD=${POSTGRESQL_BACKEND_PASSWORD}
+      - POSTGRESQL_USERNAME=${POSTGRESQL_USERNAME}
+      - POSTGRESQL_PASSWORD=${POSTGRESQL_PASSWORD}
+      - POSTGRESQL_DATABASE=${POSTGRESQL_DATABASE}
+      - REPMGR_PASSWORD=${REPMGR_PASSWORD}
+      - REPMGR_PRIMARY_HOST=pg-0
+      - REPMGR_PRIMARY_PORT=5432
+      - REPMGR_PARTNER_NODES=pg-0,pg-1:5432
+      - REPMGR_NODE_NAME=pg-1
+      - REPMGR_NODE_NETWORK_NAME=pg-1
+      - REPMGR_PORT_NUMBER=5432
+    env_file:
+      - .env
+
+  haproxy:
+    image: haproxy:latest
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
+    depends_on:
+      - pg-0
+      - pg-1
+
+  backup:
+    image: postgres:alpine
+    container_name: backup-container
+    profiles: [backup]
+    entrypoint: "/bin/sh -c 'echo \"0 3 * * * /backup.sh\" > /etc/crontabs/root && crond -f'"
+    environment:
+      - POSTGRES_HOST=haproxy
+      - POSTGRES_USER=${POSTGRESQL_USERNAME}
+      - POSTGRES_PASSWORD=${POSTGRESQL_PASSWORD}
+      - POSTGRES_DB=${POSTGRESQL_DATABASE}
+    env_file:
+      - .env
+    volumes:
+      - ./backups:/backups
+      - ./backup.sh:/backup.sh
+    depends_on:
+      - haproxy
+
+
+volumes:
+  pg_0_data:
+    driver: local
+  pg_1_data:
+    driver: local
